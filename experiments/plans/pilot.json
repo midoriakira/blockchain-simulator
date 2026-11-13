@@ -1,0 +1,15 @@
+{
+  "study": "pilot",
+  "nodes": 1000,
+  "alpha": 0.3,
+  "baseline_send": 1.0,
+  "baseline_receive": 1.0,
+  "small_delays": [0.1, 0.3, 1, 1.25, 1.5, 1.75, 2, 2.25, 3, 10, 30],
+  "epsilons": [0.5],
+  "seeds": [1001, 1002, 1003, 1004, 1005, 1006, 1007, 1008],
+  "end_time": 200000,
+  "burn_time": 5000,
+  "lookahead_time": 5000,
+  "both_directions": true,
+  "reverse_at": []
+}
