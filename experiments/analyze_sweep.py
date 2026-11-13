@@ -176,7 +176,7 @@ def plots(directory, plan, results):
             rr = [r for r in results if r['alpha'] == a and r['small_factor'] == factor
                   and r['direction'] == 'average' and r['epsilon'] == plan['epsilon']]
             ax.plot([r['baseline_delay'] for r in rr], [r['K_mean'] for r in rr],
-                    'o-', ms=4, color=color, label=f'alpha={a:g}')
+                    'o', linestyle='none', ms=4, color=color, label=f'alpha={a:g}')
             ax.axhline((1-a)*(1-2*a), color=color, linestyle='--', lw=.8, alpha=.7)
             for r in rr:
                 if r['K_ci95_low'] is not None:
@@ -188,7 +188,7 @@ def plots(directory, plan, results):
         ax.axhline(0, color='black', lw=.7)
         ax.grid(alpha=.2)
     axes[0, 0].legend(fontsize=8, ncol=2)
-    fig.suptitle('First-seen incentives: simulation (solid) vs small-delay paper (dashed)', fontsize=12)
+    fig.suptitle('First-seen incentives: simulation (points) vs small-delay paper (dashed)', fontsize=12)
     fig.text(.5, .01, f'{plan["nodes"]} miners; {plan["epsilon"]*100:g}% improvement; {len(plan["seeds"])} paired seeds; send/receive averaged within seed; pointwise 95% t intervals',
              ha='center', fontsize=8)
     fig.tight_layout(rect=[0, .04, 1, .95])

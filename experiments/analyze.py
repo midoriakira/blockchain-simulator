@@ -87,7 +87,7 @@ def main():
                         continue
                     x = [r['small_delay'] for r in selected]
                     y = [r[metric+'_mean'] for r in selected]
-                    line, = ax.plot(x, y, 'o-', ms=3, label=f'{direction}, {epsilon*100:g}%')
+                    line, = ax.plot(x, y, 'o', linestyle='none', ms=3, label=f'{direction}, {epsilon*100:g}%')
                     for r in selected:
                         lo, hi = r[metric+'_ci95_low'], r[metric+'_ci95_high']
                         if lo is not None:
