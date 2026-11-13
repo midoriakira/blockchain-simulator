@@ -18,6 +18,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def load_plan(path, quick=False):
     plan = json.loads(path.read_text())
+    if plan.get('tie_rule', 'first-seen') not in ['first-seen', 'random-own']:
+        raise ValueError('paper comparison supports first-seen or random-own')
     if quick:
         plan.update(alphas=[.3, .6], delays=[.01, 1], small_factors=[1, 1.9],
                     seeds=plan['seeds'][:2], end_time=20000, burn_time=1000,
@@ -82,7 +84,10 @@ def main():
     args.output.mkdir(parents=True, exist_ok=True)
     if any((args.output/name).exists() for name in ['runs.jsonl', 'plan.json']):
         parser.error('output already exists; choose a new directory')
-    subprocess.run(['make', 'build/latency_simulator'], cwd=ROOT, check=True)
+    rule = plan.get('tie_rule', 'first-seen')
+    binary = ROOT/'build'/('latency_simulator' if rule == 'first-seen' else 'tie_simulator')
+    source = ROOT/'src'/('latency_simulator.cpp' if rule == 'first-seen' else 'tie_simulator.cpp')
+    subprocess.run(['make', str(binary.relative_to(ROOT))], cwd=ROOT, check=True)
     (args.output/'plan.json').write_text(json.dumps(plan, indent=2)+'\n')
     cc = list(cases(plan))
 
@@ -90,7 +95,7 @@ def main():
         a, d, factor, direction, eps, seed = case
         send = d*(1-eps) if direction == 'send' else d
         receive = d*(1-eps) if direction == 'receive' else d
-        command = [ROOT/'build/latency_simulator', plan['nodes'], a, send, receive,
+        command = [binary, *([] if rule == 'first-seen' else [rule]), plan['nodes'], a, send, receive,
                    factor*d, plan['end_time'], plan['burn_time'], plan['lookahead_time'], seed]
         result = subprocess.run(list(map(str, command)), check=True, capture_output=True, text=True)
         row = json.loads(result.stdout)
@@ -111,13 +116,13 @@ def main():
                     out.flush()
                     print(f'{index}/{len(cc)} runs; {time.monotonic()-started:.1f}s', flush=True)
     manifest = dict(runs=len(cc), elapsed_seconds=time.monotonic()-started, quick=args.quick,
-                    model='Finite miners, constant-rate Poisson, first-seen, direct fixed delays, T=1',
+                    model=f'Finite miners, constant-rate Poisson, {rule}, direct fixed delays, T=1',
                     python=platform.python_version(), platform=platform.platform(),
                     compiler=subprocess.check_output(['c++', '--version'], text=True).splitlines()[0],
                     triangle_inequality='Preserved at baseline and at both unilateral interventions',
                     prefix_check='Two finite continuations: empirical stability, not a finality theorem')
-    for name, path in [('source', ROOT/'src/latency_simulator.cpp'),
-                       ('binary', ROOT/'build/latency_simulator'), ('runner', Path(__file__))]:
+    for name, path in [('source', source), ('included_first_seen_source', ROOT/'src/latency_simulator.cpp'),
+                       ('binary', binary), ('runner', Path(__file__))]:
         manifest[name+'_sha256'] = hashlib.sha256(path.read_bytes()).hexdigest()
     (args.output/'manifest.json').write_text(json.dumps(manifest, indent=2)+'\n')
     print(f'Completed {len(cc)} runs: {args.output}', flush=True)

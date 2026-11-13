@@ -1,7 +1,7 @@
 """Compare paired infinitesimal delay improvements with arXiv:2606.06860.
 
-K = Delta MPR / (epsilon * baseline_delay/T). The paper's first-order
-first-seen prediction is (1-alpha)*(1-2*alpha) for either direction.
+K = Delta MPR / (epsilon * baseline_delay/T). First-seen and the
+own-preferring random rule have separate first-order predictions.
 """
 import argparse
 from collections import defaultdict
@@ -14,6 +14,15 @@ import statistics
 
 import scipy
 from scipy.stats import t
+
+
+def paper_K(plan, a):
+    rule = plan.get('tie_rule', 'first-seen')
+    if rule == 'first-seen':
+        return (1-a)*(1-2*a)
+    if rule == 'random-own':
+        return .5*((1-a)*(1-3*a)+(1-a)**2/(plan['nodes']-1))
+    raise ValueError('no paper prediction specified for this tie rule')
 
 
 def interval(values):
@@ -99,7 +108,7 @@ def analyze(directory):
             samples[a, d, factor, 'average', eps].append(avg)
     results = []
     for (a, d, factor, direction, eps), ss in sorted(samples.items()):
-        theory = (1-a)*(1-2*a)
+        theory = paper_K(plan, a)
         r = dict(alpha=a, baseline_delay=d, small_factor=factor, direction=direction,
                  epsilon=eps, seeds=len(ss), nonzero_share_pairs=sum(s['delta_share'] != 0 for s in ss),
                  paper_K=theory, paper_share_pp_per_1pct=a*d*theory,
@@ -125,7 +134,11 @@ def analyze(directory):
         if {r['seed'] for r in rr} != set(plan['seeds']):
             raise ValueError('incomplete baseline seeds')
         q = 1-a
-        prediction = q*(2*a-1)*2*d+2*q*q*(1-1/(plan['nodes']-1))*factor*d
+        if plan.get('tie_rule', 'first-seen') == 'first-seen':
+            prediction = q*(2*a-1)*2*d+2*q*q*(1-1/(plan['nodes']-1))*factor*d
+        else:
+            s2 = q*q/(plan['nodes']-1)
+            prediction = (a*q-.5*(q*q+s2))*2*d+(q*q-s2)*factor*d
         rec = dict(alpha=a, baseline_delay=d, small_factor=factor, seeds=len(rr), paper_MPR=prediction)
         for name, values in [('MPR', [(r['reward_share_A']-a)/a for r in rr]),
                              ('chain_rate', [r['chain_rate'] for r in rr])]:
@@ -154,7 +167,8 @@ def analyze(directory):
                    scipy_version=scipy.__version__,
                    source='https://arxiv.org/html/2606.06860v1',
                    metric='MPR=(reward_share_A-alpha)/alpha; K=Delta_MPR/(epsilon*d/T)',
-                   paper_prediction='K=(1-alpha)*(1-2*alpha), first-order small-delay FS approximation',
+                   tie_rule=plan.get('tie_rule', 'first-seen'),
+                   paper_prediction='FS: q*(1-2*alpha); random-own: (q*(1-3*alpha)+sum(beta_j^2))/2. Both are first-order small-delay approximations.',
                    inference='Pointwise approximate 95% Student-t intervals over independent paired seeds; Holm p-values for separate declared families.',
                    zero_variance='Missing intervals/p-values mean no observed variation, not zero uncertainty.',
                    averaging='send and receive averaged WITHIN each seed; independent sample size remains the seed count.',
@@ -177,7 +191,7 @@ def plots(directory, plan, results):
                   and r['direction'] == 'average' and r['epsilon'] == plan['epsilon']]
             ax.plot([r['baseline_delay'] for r in rr], [r['K_mean'] for r in rr],
                     'o', linestyle='none', ms=4, color=color, label=f'alpha={a:g}')
-            ax.axhline((1-a)*(1-2*a), color=color, linestyle='--', lw=.8, alpha=.7)
+            ax.axhline(paper_K(plan, a), color=color, linestyle='--', lw=.8, alpha=.7)
             for r in rr:
                 if r['K_ci95_low'] is not None:
                     ax.errorbar(r['baseline_delay'], r['K_mean'],
@@ -188,7 +202,7 @@ def plots(directory, plan, results):
         ax.axhline(0, color='black', lw=.7)
         ax.grid(alpha=.2)
     axes[0, 0].legend(fontsize=8, ncol=2)
-    fig.suptitle('First-seen incentives: simulation (points) vs small-delay paper (dashed)', fontsize=12)
+    fig.suptitle(f'{plan.get("tie_rule", "first-seen")} incentives: simulation (points) vs small-delay paper (dashed)', fontsize=12)
     fig.text(.5, .01, f'{plan["nodes"]} miners; {plan["epsilon"]*100:g}% improvement; {len(plan["seeds"])} paired seeds; send/receive averaged within seed; pointwise 95% t intervals',
              ha='center', fontsize=8)
     fig.tight_layout(rect=[0, .04, 1, .95])

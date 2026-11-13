@@ -25,3 +25,5 @@ jobs:
           python experiments/analyze.py results/ci --plots
           python experiments/sweep.py --quick --output results/grid-ci
           python experiments/analyze_sweep.py results/grid-ci --plots
+          python experiments/sweep.py --plan experiments/plans/random_comparison.json --quick --output results/random-ci
+          python experiments/analyze_sweep.py results/random-ci --plots

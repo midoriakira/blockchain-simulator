@@ -9,8 +9,9 @@ PoWのブロック生成・配送と、報酬シェア・遅延改善インセ�
 | `blockchainSimulator.cpp` | もともとのシミュレータ原本。既存の内容を保持しています。 |
 | `src/uniform_simulator.cpp` | 共通の一定遅延を扱う独立した検証版。高さ別の開始者・採用者を集計します。 |
 | `src/latency_simulator.cpp` | 大規模マイナーAの送信・受信遅延と、小規模マイナー間遅延を別々に設定する版。 |
+| `src/tie_simulator.cpp` | 同高の最長候補をランダムに選ぶ規則とfirst-seenを比較する版。 |
 
-新しい2実装はブロックの祖先を全て保持し、JSONを出力します。原本のGit blob SHAは
+検証用実装はブロックの祖先を全て保持し、JSONを出力します。原本のGit blob SHAは
 `ebadfd662a3cddade3b4aaa0bfe9b7008753c96b`で、`make test`でも一致を確認します。
 
 ## ビルドとテスト
@@ -24,6 +25,7 @@ make test
 ```
 
 `build/latency_simulator`、`build/uniform_simulator`、`build/original_simulator`が生成されます。
+`make`では`build/tie_simulator`も生成します。
 シミュレーションとテストの実行にはPythonの追加パッケージは不要です。
 
 テストには独立した配送ヒープとの180,000ブロックの照合、共通遅延版との108,000ブロックの照合、
@@ -184,3 +186,37 @@ python3 experiments/analyze_sweep.py results/grid --plots
 主実験の送受信別、seed内平均、微小幅の各検定群に分けてHolm補正したp値も保存します。
 全ペアで変化がなければ区間・p値は欠測とし、真の効果0とは判定しません。
 微小幅の比較も同じseed間で行います。
+
+## Randomによる同高分岐の選択
+
+```sh
+./build/tie_simulator random-own 1000 0.3 1 1 1 2000000 10000 5000 5201
+python3 experiments/sweep.py --plan experiments/plans/random_comparison.json --output results/random --workers 4
+python3 experiments/analyze_sweep.py results/random --plots
+```
+
+`tie_simulator`の引数は、規則名に続いて送受信遅延版と同じ9引数です。
+多分岐での動作も含め、規則を次のように定義します。
+
+- `first-seen`: 同高では現在の枝を維持する既存実装。
+- `random-own`: 既知の最大高さに自己生成ブロックがあれば維持し、それ以外は同高の全候補から一様に選びます。
+- `random-all`: 自己生成ブロックを含む同高の全候補から一様に選びます。
+
+`random-own`は、二分岐で競合ブロックの生成者が自己ブロックを維持する、比較論文の勝率式に整合する多分岐への拡張です。
+`random-all`とは別の規則です。`random-all`に比較論文のRD式は適用していません。
+採掘列と分岐選択用の乱数列を分離し、同じseedの遅延介入で採掘列を保ちます。
+計測時の選択は現在の最長候補全体に対する一様選択で、到着ごとの二者間コイントスではありません。
+
+比較論文のRD一次予測は、O側を均等分割した場合、送受信とも
+`K = ((1-alpha)*(1-3*alpha) + (1-alpha)^2/(N-1))/2`です。
+この条件では正の改善インセンティブの境界が`alpha < N/(3*N-2)`となり、
+小規模マイナー極限で1/3に近づきます。
+共通遅延のfirst-seen用上界や、そのタイトさの証明をrandomへ自動的に移してはいません。
+
+`fresh-random-own`と`fresh-random-all`は、Oの各採掘を新しいマイナーとして扱う比較モデルです。
+CLIでは保持するビュー数として`nodes=2`を指定します。物理的な2マイナー系ではありません。
+通常の有限ノード実験には`random-own`または`random-all`を使用してください。
+
+`make test`は、別実装の受信者別ヒープとの90,000ブロックの照合、
+物理的2マイナー系での`random-own`とfirst-seenの一致10,000ブロック、
+freshモデルとO採掘者を毎回変える有限トレースとの一致5,000ブロックも確認します。

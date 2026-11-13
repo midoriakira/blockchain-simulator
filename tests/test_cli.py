@@ -111,6 +111,22 @@ class SimulatorChecks(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'triangle'):
                 module.load_plan(invalid)
 
+    def test_random_rule_keeps_mining_stream_and_zero_delay_rewards(self):
+        binary=ROOT/'build/tie_simulator'
+        rows=[]
+        for rule in ['first-seen','random-own','random-all']:
+            row=json.loads(subprocess.check_output([str(binary),rule,'1000','.3',
+                            '0','0','0','10000','1000','1000','5101'],text=True))
+            self.assertEqual(row['accepted_A'],row['generated_A'])
+            rows.append(row)
+        self.assertEqual(len({r['generated_A'] for r in rows}),1)
+        self.assertEqual(len({r['mining_events'] for r in rows}),1)
+        old=latency(1000,.3,1,1,1,10000,1000,1000,5101)
+        new=json.loads(subprocess.check_output([str(binary),'first-seen','1000','.3',
+                        '1','1','1','10000','1000','1000','5101'],text=True))
+        for key,value in old.items():
+            self.assertEqual(new[key],value)
+
 
 if __name__ == '__main__':
     unittest.main()
