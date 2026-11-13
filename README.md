@@ -154,3 +154,33 @@ python3 experiments/analyze.py results/marginal --plots
 
 乱数seedに加え、コンパイラ・標準ライブラリ・Python依存関係も再現条件として記録してください。
 異なるC++標準ライブラリ間のビット単位の一致は前提にしていません。
+
+## d/T・最大ハッシュ比率と論文の比較
+
+[On the Incentive Compatibility of Block Propagation in Bitcoin](https://arxiv.org/abs/2606.06860)
+のfirst-seen一次近似と、同じ報酬シェア指標で比較する設定です。
+基準でAの送信・受信遅延を`d`、小規模間遅延を`k*d`とし、
+最大マイナーAだけの送信または受信を`(1-epsilon)*d`にします。
+
+```sh
+python3 experiments/sweep.py --quick --output results/grid-quick
+python3 experiments/sweep.py --output results/grid --workers 4
+python3 experiments/analyze_sweep.py results/grid --plots
+```
+
+完全設定は1,000ノード、Aの比率10〜60%、`d/T`が0.01〜3、`k`が1と1.9、
+各16seedです。0.1%短縮を全条件で測り、代表点で0.01%短縮も測ります。
+基準を含め4,224実行です。小規模マイナーのハッシュは残余を均等分割します。
+
+論文に合わせて`MPR=(reward_share_A-alpha)/alpha`を用い、
+`K=(MPR_improved-MPR_baseline)/(epsilon*d/T)`を出力します。
+論文のfirst-seen一次予測は送信・受信とも`K=(1-alpha)*(1-2*alpha)`です。
+全条件で基準と操作後の遅延行列は三角不等式を満たします。
+高遅延の条件は論文の小遅延仮定の外側を調べるもので、論文の反証とは区別します。
+
+`effects.csv`、`baselines.csv`、`paired_seed_effects.csv`、`step_stability.csv`と図を生成します。
+送受信の平均はseed内で取り、独立標本数を増やしません。
+信頼区間は点ごとの近似95% t区間です。効果0および一次予測との差について、
+主実験の送受信別、seed内平均、微小幅の各検定群に分けてHolm補正したp値も保存します。
+全ペアで変化がなければ区間・p値は欠測とし、真の効果0とは判定しません。
+微小幅の比較も同じseed間で行います。

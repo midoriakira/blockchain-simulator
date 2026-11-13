@@ -23,3 +23,5 @@ jobs:
         run: |
           python experiments/run.py --quick --output results/ci
           python experiments/analyze.py results/ci --plots
+          python experiments/sweep.py --quick --output results/grid-ci
+          python experiments/analyze_sweep.py results/grid-ci --plots

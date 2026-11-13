@@ -86,6 +86,31 @@ class SimulatorChecks(unittest.TestCase):
                 self.assertEqual(row['generated_A'], base[row['small_delay'], row['seed']]['generated_A'])
                 self.assertEqual(row['confirmation_blocks_reorganized'], 0)
 
+    def test_sweep_keeps_triangles_and_pairs(self):
+        spec = importlib.util.spec_from_file_location('sweep', ROOT/'experiments/sweep.py')
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        plan = module.load_plan(ROOT/'experiments/plans/paper_comparison.json')
+        self.assertEqual(len(list(module.cases(plan))), 4224)
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory)/'runs'
+            subprocess.run([sys.executable, str(ROOT/'experiments/sweep.py'), '--quick',
+                            '--output', str(output), '--workers', '2'], check=True,
+                           capture_output=True, text=True)
+            rows = [json.loads(line) for line in (output/'runs.jsonl').read_text().splitlines()]
+            self.assertEqual(len(rows), 56)
+            base = {(r['alpha'], r['baseline_delay'], r['small_factor'], r['seed']): r
+                    for r in rows if r['kind'] == 'baseline'}
+            for row in rows:
+                key = tuple(row[k] for k in ['alpha', 'baseline_delay', 'small_factor', 'seed'])
+                self.assertEqual(row['generated_A'], base[key]['generated_A'])
+                self.assertLessEqual(row['small_delay'], row['out_delay']+row['in_delay'])
+            bad = dict(plan, small_factors=[2])
+            invalid = Path(directory)/'invalid.json'
+            invalid.write_text(json.dumps(bad))
+            with self.assertRaisesRegex(ValueError, 'triangle'):
+                module.load_plan(invalid)
+
 
 if __name__ == '__main__':
     unittest.main()
